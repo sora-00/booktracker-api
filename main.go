@@ -1,62 +1,83 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/cors"
+
+	"github.com/sora-00/booktracker-api/app/controller"
+	"github.com/sora-00/booktracker-api/app/domain/service"
+	"github.com/sora-00/booktracker-api/app/infra/repository"
+	"github.com/sora-00/booktracker-api/app/usecase"
+	"github.com/sora-00/booktracker-api/pkg/db"
 )
 
-type Book struct {
-	ID     int    `json:"id"`
-	Title  string `json:"title"`
-	Author string `json:"author"`
-}
-
 func main() {
-	r := chi.NewRouter()
+	// DB接続
+	conn, err := db.NewPostgres()
+	if err != nil {
+		log.Fatalf("failed to connect database: %v", err)
+	}
+	defer conn.Close()
 
-	// ミドルウェア
+	// 依存関係の注入
+	// infra層（DB実装）
+	bookRepo := repository.NewBook(conn)
+
+	// domain層（ビジネスロジック）
+	bookService := service.NewService(bookRepo)
+
+	// usecase層（アプリケーションロジック）
+	bookUsecase := usecase.NewUsecase(bookRepo, bookService)
+
+	// controller層（HTTPハンドラ）
+	bookController := controller.NewController(bookUsecase)
+
+	// ルーティング設定
+	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
-	// CORS設定
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"*"}, // 開発中は全部許可でOK
-		AllowedMethods:   []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"*"},
-		AllowCredentials: false,
-	}))
+	// 404/405を可視化
+	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("404 Not Found: %s %s", r.Method, r.URL.Path)
+		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+	})
+	r.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("405 Method Not Allowed: %s %s", r.Method, r.URL.Path)
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+	})
 
-	// ヘルスチェック
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("ok"))
 	})
 
-	// APIルート
-	r.Route("/api/v1", func(api chi.Router) {
-		api.Get("/books", func(w http.ResponseWriter, r *http.Request) {
-			books := []Book{
-				{ID: 1, Title: "The Great Gatsby", Author: "F. Scott Fitzgerald"},
-				{ID: 2, Title: "1984", Author: "George Orwell"},
-			}
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(books)
-		})
+	// /api/books（末尾なし）も直に受ける
+	r.Get("/api/books", bookController.GetBooks)
+	r.Post("/api/books", bookController.CreateBook)
+
+	r.Route("/api/books", func(r chi.Router) {
+		r.Get("/", bookController.GetBooks)
+		r.Get("/{id}", bookController.GetBookByID)
+		r.Post("/", bookController.CreateBook)
+		r.Delete("/{id}", bookController.DeleteBook)
 	})
 
-	// サーバ起動
+    // ルート一覧をログ出力
+    chi.Walk(r, func(method string, route string, handler http.Handler, middlewares ...func(http.Handler) http.Handler) error {
+        log.Printf("route: %s %s", method, route)
+        return nil
+    })
+
+	// サーバー起動
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8080"
+		port = "8085"
 	}
-	addr := fmt.Sprintf(":%s", port)
-	log.Println("Server starting on", addr)
-	log.Fatal(http.ListenAndServe(addr, r))
+	addr := ":" + port
+	log.Printf("Listening on %s 🚀\n", addr)
+	http.ListenAndServe(addr, r)
 }
