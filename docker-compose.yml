@@ -1,0 +1,31 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16
+    container_name: booktracker-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: booktracker
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+  api:
+    build: .
+    container_name: booktracker-api
+    environment:
+      - PORT=8081
+    ports:
+      - "8085:8081"
+    volumes:
+      - .:/app
+    depends_on:
+      - db
+
+
+volumes:
+  db_data:
