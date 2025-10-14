@@ -14,7 +14,7 @@ API_PORT := 8085
 ## 🚀 すべて起動（Docker + Go）
 dev:
 	@echo "🚀 Starting Docker containers and Go server..."
-	docker compose up -d
+	docker compose up --build -d
 	@echo "Docker containers are up. Following logs (Ctrl-C to detach)..."
 	docker compose logs -f
 

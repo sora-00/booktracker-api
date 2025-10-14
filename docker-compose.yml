@@ -13,18 +13,30 @@ services:
       - "5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d booktracker"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   api:
     build: .
     container_name: booktracker-api
     environment:
       - PORT=8081
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=app
+      - POSTGRES_PASSWORD=app
+      - POSTGRES_DB=booktracker
     ports:
       - "8085:8081"
     volumes:
       - .:/app
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
 
 volumes:
