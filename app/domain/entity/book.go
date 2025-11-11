@@ -1,9 +1,9 @@
 package entity
 
 type Book struct {
-	ID     int
-	Title  string
-	Author string
+	ID     int    `json:"id"`
+	Title  string `json:"title"`
+	Author string `json:"author"`
 }
 
 func (b *Book) Rename(newTitle string) {
