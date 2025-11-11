@@ -7,6 +7,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/sora-00/booktracker-api/app/usecase"
+	usecaseRequest "github.com/sora-00/booktracker-api/app/usecase/request"
+	usecaseResponse "github.com/sora-00/booktracker-api/app/usecase/response"
 )
 
 type BookController struct {
@@ -24,7 +26,7 @@ func (c *BookController) GetBooks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(books)
+	json.NewEncoder(w).Encode(usecaseResponse.FromBookEntities(books))
 }
 
 func (c *BookController) GetBookByID(w http.ResponseWriter, r *http.Request) {
@@ -42,14 +44,11 @@ func (c *BookController) GetBookByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(book)
+	json.NewEncoder(w).Encode(usecaseResponse.FromBookEntity(book))
 }
 
 func (c *BookController) CreateBook(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Title  string `json:"title"`
-		Author string `json:"author"`
-	}
+	var req usecaseRequest.CreateBook
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -62,7 +61,7 @@ func (c *BookController) CreateBook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(book)
+	json.NewEncoder(w).Encode(usecaseResponse.FromBookEntity(book))
 }
 
 func (c *BookController) DeleteBook(w http.ResponseWriter, r *http.Request) {
