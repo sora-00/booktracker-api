@@ -16,7 +16,7 @@ func NewService(repo repository.Book) *BookService {
 }
 
 // CreateBook はタイトル重複を避けつつ新しい本を登録するビジネスルール
-func (s *BookService) CreateBook(title, author string) (*entity.Book, error) {
+func (s *BookService) CreateBook(title, author string, totalPages int, publisher string) (*entity.Book, error) {
 	if title == "" {
 		return nil, errors.New("title is required")
 	}
@@ -34,8 +34,10 @@ func (s *BookService) CreateBook(title, author string) (*entity.Book, error) {
 
 	// 重複がなければ新しい本を作成
 	book := &entity.Book{
-		Title:  title,
-		Author: author,
+		Title:      title,
+		Author:     author,
+		TotalPages: totalPages,
+		Publisher: publisher,
 	}
 
 	if err := s.repo.Save(book); err != nil {
