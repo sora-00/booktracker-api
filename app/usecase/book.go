@@ -30,8 +30,8 @@ func (u *BookUsecase) GetBookByID(id int) (*entity.Book, error) {
 }
 
 // 本を登録
-func (u *BookUsecase) CreateBook(title, author string) (*entity.Book, error) {
-	book, err := u.bookService.CreateBook(title, author)
+func (u *BookUsecase) CreateBook(title, author string, totalPages int, publisher string) (*entity.Book, error) {
+	book, err := u.bookService.CreateBook(title, author, totalPages, publisher)
 	if err != nil {
 		return nil, err
 	}

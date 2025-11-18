@@ -54,7 +54,7 @@ func (c *BookController) CreateBook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	book, err := c.Usecase.CreateBook(req.Title, req.Author)
+	book, err := c.Usecase.CreateBook(req.Title, req.Author, req.TotalPages, req.Publisher)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
