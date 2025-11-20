@@ -1,44 +1,34 @@
 package service
 
 import (
+	"context"
 	"errors"
+	"time"
 
 	"github.com/sora-00/booktracker-api/app/domain/entity"
 	"github.com/sora-00/booktracker-api/app/domain/repository"
 )
 
-type BookService struct {
-	repo repository.Book // 抽象interfaceに依存
+type BookSvc struct {
+	repo repository.BookRepo // 抽象interfaceに依存
 }
 
-func NewService(repo repository.Book) *BookService {
-	return &BookService{repo: repo}
+func NewService(repo repository.BookRepo) *BookSvc {
+	return &BookSvc{repo: repo}
 }
 
 // CreateBook はタイトル重複を避けつつ新しい本を登録するビジネスルール
-func (s *BookService) CreateBook(title, author string) (*entity.Book, error) {
-	if title == "" {
+func (s *BookSvc) CreateBook(ctx context.Context, book *entity.Book) (*entity.Book, error) {
+	if book == nil {
+		return nil, errors.New("book is required")
+	}
+	if book.Title == "" {
 		return nil, errors.New("title is required")
 	}
 
-	// タイトル重複チェック
-	books, err := s.repo.FindAll()
-	if err != nil {
-		return nil, err
-	}
-	for _, b := range books {
-		if b.Title == title {
-			return nil, errors.New("book title already exists")
-		}
-	}
+	book.CreatedAt = time.Now()
 
-	// 重複がなければ新しい本を作成
-	book := &entity.Book{
-		Title:  title,
-		Author: author,
-	}
-
-	if err := s.repo.Save(book); err != nil {
+	if err := s.repo.Create(ctx, book); err != nil {
 		return nil, err
 	}
 
