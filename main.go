@@ -9,8 +9,8 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/sora-00/booktracker-api/app/controller"
+	"github.com/sora-00/booktracker-api/app/domain/repository"
 	"github.com/sora-00/booktracker-api/app/domain/service"
-	"github.com/sora-00/booktracker-api/app/infra/repository"
 	"github.com/sora-00/booktracker-api/app/usecase"
 	"github.com/sora-00/booktracker-api/pkg/db"
 )
@@ -25,7 +25,7 @@ func main() {
 
 	// 依存関係の注入
 	// infra層（DB実装）
-	bookRepo := repository.NewBook(conn)
+	bookRepo := repository.NewBookRepo(conn)
 
 	// domain層（ビジネスロジック）
 	bookService := service.NewService(bookRepo)
@@ -56,14 +56,13 @@ func main() {
 	})
 
 	// /api/books（末尾なし）も直に受ける
-	r.Get("/api/books", bookController.GetBooks)
-	r.Post("/api/books", bookController.CreateBook)
-
-	r.Route("/api/books", func(r chi.Router) {
-		r.Get("/", bookController.GetBooks)
-		r.Get("/{id}", bookController.GetBookByID)
-		r.Post("/", bookController.CreateBook)
-		r.Delete("/{id}", bookController.DeleteBook)
+	r.Route("/api", func(r chi.Router) {
+		r.Route("/books", func(r chi.Router) {
+			r.Get("/", bookController.GetBooks)
+			r.Get("/{id}", bookController.GetBookByID)
+			r.Post("/", bookController.CreateBook)
+			r.Delete("/{id}", bookController.DeleteBook)
+		})
 	})
 
     // ルート一覧をログ出力

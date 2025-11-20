@@ -20,7 +20,7 @@ func NewController(u *usecase.BookUsecase) *BookController {
 }
 
 func (c *BookController) GetBooks(w http.ResponseWriter, r *http.Request) {
-	books, err := c.Usecase.GetAllBooks()
+	books, err := c.Usecase.GetAllBooks(r.Context())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -37,7 +37,7 @@ func (c *BookController) GetBookByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	book, err := c.Usecase.GetBookByID(id)
+	book, err := c.Usecase.GetBookByID(r.Context(), id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
@@ -48,13 +48,13 @@ func (c *BookController) GetBookByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *BookController) CreateBook(w http.ResponseWriter, r *http.Request) {
-	var req usecaseRequest.CreateBook
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	req, err := usecaseRequest.NewCreateBook(r)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	book, err := c.Usecase.CreateBook(req.Title, req.Author)
+	book, err := c.Usecase.CreateBook(r.Context(), req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -72,7 +72,7 @@ func (c *BookController) DeleteBook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := c.Usecase.DeleteBook(id); err != nil {
+	if err := c.Usecase.DeleteBook(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
