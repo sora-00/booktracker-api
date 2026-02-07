@@ -1,31 +1,41 @@
 package response
 
 import (
-	"time"
-
 	"github.com/sora-00/booktracker-api/app/domain/entity"
 )
 
-type Book struct {
-	ID        int       `json:"id"`
-	Title     string    `json:"title"`
-	Author    string    `json:"author"`
-	CreatedAt time.Time `json:"createdAt"`
+type BookGet struct {
+	Books []*entity.Book `json:"books"`
 }
 
-func FromBookEntity(book *entity.Book) Book {
-	return Book{
-		ID:     book.ID,
-		Title:  book.Title,
-		Author: book.Author,
-		CreatedAt: book.CreatedAt,
-	}
-}
-
-func FromBookEntities(books []entity.Book) []Book {
-	responses := make([]Book, 0, len(books))
+func NewBookGet(books []entity.Book) *BookGet {
+	bs := make([]*entity.Book, 0, len(books))
 	for i := range books {
-		responses = append(responses, FromBookEntity(&books[i]))
+		bs = append(bs, &books[i])
 	}
-	return responses
+	return &BookGet{Books: bs}
+}
+
+type BookGetByID struct {
+	*entity.Book
+}
+
+func NewBookGetByID(book *entity.Book) *BookGetByID {
+	return &BookGetByID{book}
+}
+
+type BookCreate struct {
+	*entity.Book
+}
+
+func NewBookCreate(book *entity.Book) *BookCreate {
+	return &BookCreate{book}
+}
+
+type BookDelete struct {
+	BookID int `json:"bookId"`
+}
+
+func NewBookDelete(bookID int) *BookDelete {
+	return &BookDelete{BookID: bookID}
 }

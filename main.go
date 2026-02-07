@@ -9,8 +9,8 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/sora-00/booktracker-api/app/controller"
-	"github.com/sora-00/booktracker-api/app/domain/repository"
 	"github.com/sora-00/booktracker-api/app/domain/service"
+	"github.com/sora-00/booktracker-api/app/infra/repository/postgres"
 	"github.com/sora-00/booktracker-api/app/usecase"
 	"github.com/sora-00/booktracker-api/pkg/db"
 )
@@ -24,8 +24,8 @@ func main() {
 	defer conn.Close()
 
 	// 依存関係の注入
-	// infra層（DB実装）
-	bookRepo := repository.NewBookRepo(conn)
+	// infra層（PostgreSQL 実装）→ domain の repository インターフェースを満たす
+	bookRepo := postgres.NewBookRepo(conn)
 
 	// domain層（ビジネスロジック）
 	bookService := service.NewService(bookRepo)
@@ -65,12 +65,6 @@ func main() {
 		})
 	})
 
-    // ルート一覧をログ出力
-    chi.Walk(r, func(method string, route string, handler http.Handler, middlewares ...func(http.Handler) http.Handler) error {
-        log.Printf("route: %s %s", method, route)
-        return nil
-    })
-
 	// サーバー起動
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -78,5 +72,7 @@ func main() {
 	}
 	addr := ":" + port
 	log.Printf("Listening on %s 🚀\n", addr)
-	http.ListenAndServe(addr, r)
+	if err := http.ListenAndServe(addr, r); err != nil {
+		log.Fatalf("server failed: %v", err)
+	}
 }
