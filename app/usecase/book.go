@@ -7,7 +7,7 @@ import (
 	"github.com/sora-00/booktracker-api/app/domain/entity"
 	"github.com/sora-00/booktracker-api/app/domain/repository"
 	"github.com/sora-00/booktracker-api/app/domain/service"
-	usecaseRequest "github.com/sora-00/booktracker-api/app/usecase/request"
+	"github.com/sora-00/booktracker-api/app/usecase/request"
 )
 
 // BookUsecase は book に関するユースケースをまとめる
@@ -33,19 +33,21 @@ func (u *BookUsecase) GetBookByID(ctx context.Context, id int) (*entity.Book, er
 	return u.bookRepo.FindByID(ctx, id)
 }
 
-// 本を登録
-func (u *BookUsecase) CreateBook(ctx context.Context, req *usecaseRequest.CreateBook) (*entity.Book, error) {
+// 本を登録（request を entity に変換するのは usecase の役割）
+func (u *BookUsecase) CreateBook(ctx context.Context, req *request.BookCreate) (*entity.Book, error) {
+	now := time.Now()
 	book := &entity.Book{
-		Title:     req.Title,
-		Author:    req.Author,
-		CreatedAt: time.Now(),
+		Title:              req.Title,
+		Author:             req.Author,
+		TotalPages:         req.TotalPages,
+		Publisher:          req.Publisher,
+		ThumbnailUrl:       req.ThumbnailUrl,
+		Status:             entity.Status(req.Status),
+		TargetCompleteDate: req.TargetCompleteDate,
+		CreatedAt:          now,
+		UpdatedAt:          now,
 	}
-
-	created, err := u.bookService.CreateBook(ctx, book)
-	if err != nil {
-		return nil, err
-	}
-	return created, nil
+	return u.bookService.CreateBook(ctx, book)
 }
 
 // 本を削除
