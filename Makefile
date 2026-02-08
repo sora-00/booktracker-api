@@ -3,19 +3,19 @@
 # デフォルトターゲット
 .DEFAULT_GOAL := help
 
-# docker-compose.yml に合わせて設定
-DB_SERVICE := db
 API_PORT := 8085
 
 # ------------------------------------------
 # コマンド一覧
 # ------------------------------------------
 
-## 🚀 すべて起動（Docker + Go）
+## 🚀 すべて起動（Docker + エミュレータ）
+## 事前に別ターミナルで: export PATH="/opt/homebrew/opt/openjdk@21/bin:$$PATH" && gcloud beta emulators datastore start --project=booktracker
 dev:
-	@echo "🚀 Starting Docker containers and Go server..."
+	@echo "🚀 Starting API in Docker (connects to Datastore emulator on host)..."
+	@echo "   Ensure emulator is running in another terminal: gcloud beta emulators datastore start --project=booktracker"
 	docker compose up --build -d
-	@echo "Docker containers are up. Following logs (Ctrl-C to detach)..."
+	@echo "Docker is up. Following logs (Ctrl-C to detach)..."
 	docker compose logs -f
 
 ## 🧠 ローカルのみGoサーバー起動（Dockerは使わない）

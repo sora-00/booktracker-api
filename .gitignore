@@ -23,3 +23,8 @@ db_data/
 # Env files
 .env
 .env.*
+
+# GCP サービスアカウントキー（絶対にコミットしない）
+keys/
+*.credentials.json
+*-key.json

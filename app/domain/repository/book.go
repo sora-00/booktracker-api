@@ -8,7 +8,7 @@ import (
 )
 
 // BookRepo は本の永続化のインターフェース。
-// PostgreSQL などの実装は app/infra/repository/postgres にあります。
+// 実装は app/infra/repository/datastore（Cloud Datastore）にある
 type BookRepo interface {
 	Create(ctx context.Context, book *entity.Book) error
 	FindAll(ctx context.Context) ([]entity.Book, error)

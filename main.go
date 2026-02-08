@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
@@ -10,22 +11,22 @@ import (
 
 	"github.com/sora-00/booktracker-api/app/controller"
 	"github.com/sora-00/booktracker-api/app/domain/service"
-	"github.com/sora-00/booktracker-api/app/infra/repository/postgres"
+	dsrepo "github.com/sora-00/booktracker-api/app/infra/repository/datastore"
 	"github.com/sora-00/booktracker-api/app/usecase"
-	"github.com/sora-00/booktracker-api/pkg/db"
+	dsclient "github.com/sora-00/booktracker-api/pkg/datastore"
 )
 
 func main() {
-	// DB接続
-	conn, err := db.NewPostgres()
+	ctx := context.Background()
+	// Cloud Datastore 接続
+	ds, err := dsclient.NewClient(ctx)
 	if err != nil {
-		log.Fatalf("failed to connect database: %v", err)
+		log.Fatalf("failed to connect datastore: %v", err)
 	}
-	defer conn.Close()
+	defer ds.Close()
 
-	// 依存関係の注入
-	// infra層（PostgreSQL 実装）→ domain の repository インターフェースを満たす
-	bookRepo := postgres.NewBookRepo(conn)
+	// 依存関係の注入（infra層: Datastore 実装。ds は middleware で context に載せる）
+	bookRepo := dsrepo.NewBookRepo()
 
 	// domain層（ビジネスロジック）
 	bookService := service.NewService(bookRepo)
@@ -40,6 +41,13 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	// 各リクエストの context に Datastore クライアントを入れる（repository で FromContext する前提）
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := dsclient.WithContext(r.Context(), ds)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	})
 
 	// 404/405を可視化
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
@@ -53,6 +61,10 @@ func main() {
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
+	})
+	// ブラウザが自動で叩く favicon は 204 で返して 404 ログを出さない
+	r.Get("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
 	})
 
 	// /api/books（末尾なし）も直に受ける
