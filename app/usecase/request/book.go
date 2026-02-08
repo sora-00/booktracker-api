@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -89,18 +90,41 @@ func NewBookUpdate(req *http.Request) (*BookUpdate, error) {
 
 // ---
 
-// BookCreateForm の targetCompleteDate はフロントから RFC3339 形式（例: "2025-12-31T00:00:00Z"）で送ること
+// NormalizedDate は targetCompleteDate 用。YYYY-MM-DD または RFC3339 を受け付け、その日の 00:00:00Z に正規化してから DB に保存する。
+type NormalizedDate time.Time
+
+func (t *NormalizedDate) UnmarshalJSON(b []byte) error {
+	s := strings.Trim(string(b), `"`)
+	if s == "" || s == "null" {
+		return errors.New("targetCompleteDate is required or invalid format")
+	}
+	var parsed time.Time
+	var err error
+	parsed, err = time.Parse(time.RFC3339, s)
+	if err != nil {
+		parsed, err = time.Parse("2006-01-02", s)
+		if err != nil {
+			return errors.New("targetCompleteDate must be YYYY-MM-DD or RFC3339")
+		}
+	}
+	*t = NormalizedDate(time.Date(parsed.Year(), parsed.Month(), parsed.Day(), 0, 0, 0, 0, time.UTC))
+	return nil
+}
+
+func (t NormalizedDate) Time() time.Time { return time.Time(t) }
+
+// BookCreateForm の targetCompleteDate は YYYY-MM-DD または RFC3339。正規化後 00:00:00Z で保存する。
 type BookCreateForm struct {
-	Title              string    `json:"title"`
-	Author             string    `json:"author"`
-	TotalPages         int       `json:"totalPages"`
-	Publisher          string    `json:"publisher"`
-	ThumbnailUrl       string    `json:"thumbnailUrl"`
-	Status             string    `json:"status"`
-	TargetCompleteDate time.Time `json:"targetCompleteDate"`
-	EncounterNote      string    `json:"encounterNote"`      // この本に出会った経緯
-	ReadPages          int       `json:"readPages"`          // 読み終わったページ数
-	TargetPagesPerDay  int       `json:"targetPagesPerDay"`  // 目標ページ数/日
+	Title              string         `json:"title"`
+	Author             string         `json:"author"`
+	TotalPages         int            `json:"totalPages"`
+	Publisher          string         `json:"publisher"`
+	ThumbnailUrl       string         `json:"thumbnailUrl"`
+	Status             string         `json:"status"`
+	TargetCompleteDate NormalizedDate `json:"targetCompleteDate"`
+	EncounterNote      string         `json:"encounterNote"`      // この本に出会った経緯
+	ReadPages          int            `json:"readPages"`          // 読み終わったページ数
+	TargetPagesPerDay  int            `json:"targetPagesPerDay"`  // 目標ページ数/日
 }
 
 func (f BookCreateForm) ValidateBookCreateForm() error {
@@ -119,8 +143,8 @@ func (f BookCreateForm) ValidateBookCreateForm() error {
 		return errors.New("status is required")
 	case f.Status != "unread" && f.Status != "reading" && f.Status != "completed":
 		return errors.New("status must be unread, reading, or completed")
-	case f.TargetCompleteDate.IsZero():
-		return errors.New("targetCompleteDate is required or invalid format (use RFC3339)")
+	case f.TargetCompleteDate.Time().IsZero():
+		return errors.New("targetCompleteDate is required or invalid format (use YYYY-MM-DD or RFC3339)")
 	case f.ReadPages < 0:
 		return errors.New("readPages must be 0 or greater")
 	case f.ReadPages > f.TotalPages:
@@ -132,20 +156,20 @@ func (f BookCreateForm) ValidateBookCreateForm() error {
 }
 
 // BookUpdateForm は更新可能な項目のみ。送った項目だけ更新する（nil の項目は既存のまま）。
-// targetCompleteDate は RFC3339 形式で送ること。
+// targetCompleteDate は YYYY-MM-DD または RFC3339。正規化後 00:00:00Z で保存する。
 type BookUpdateForm struct {
-	ThumbnailUrl       *string    `json:"thumbnailUrl"`
-	TargetCompleteDate *time.Time `json:"targetCompleteDate"`
-	EncounterNote      *string    `json:"encounterNote"`
-	TargetPagesPerDay  *int       `json:"targetPagesPerDay"`
+	ThumbnailUrl       *string         `json:"thumbnailUrl"`
+	TargetCompleteDate *NormalizedDate `json:"targetCompleteDate"`
+	EncounterNote      *string         `json:"encounterNote"`
+	TargetPagesPerDay  *int            `json:"targetPagesPerDay"`
 }
 
 func (f BookUpdateForm) ValidateBookUpdateForm() error {
 	if f.TargetPagesPerDay != nil && *f.TargetPagesPerDay < 0 {
 		return errors.New("targetPagesPerDay must be 0 or greater")
 	}
-	if f.TargetCompleteDate != nil && f.TargetCompleteDate.IsZero() {
-		return errors.New("targetCompleteDate invalid format (use RFC3339)")
+	if f.TargetCompleteDate != nil && f.TargetCompleteDate.Time().IsZero() {
+		return errors.New("targetCompleteDate invalid format (use YYYY-MM-DD or RFC3339)")
 	}
 	return nil
 }
