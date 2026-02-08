@@ -8,25 +8,29 @@ import (
 	"github.com/sora-00/booktracker-api/app/domain/repository"
 	"github.com/sora-00/booktracker-api/app/usecase"
 	"github.com/sora-00/booktracker-api/app/usecase/request"
-	"github.com/sora-00/booktracker-api/app/usecase/response"
 )
 
 type BookController struct {
-	Usecase *usecase.BookUsecase
+	Book *usecase.Book
 }
 
-func NewController(u *usecase.BookUsecase) *BookController {
-	return &BookController{Usecase: u}
+func NewBookController(b *usecase.Book) *BookController {
+	return &BookController{Book: b}
 }
 
 func (c *BookController) GetBooks(w http.ResponseWriter, r *http.Request) {
-	books, err := c.Usecase.GetAllBooks(r.Context())
+	req, err := request.NewBookGet(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	res, err := c.Book.Get(r.Context(), req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response.NewBookGet(books))
+	json.NewEncoder(w).Encode(res)
 }
 
 func (c *BookController) GetBookByID(w http.ResponseWriter, r *http.Request) {
@@ -35,7 +39,7 @@ func (c *BookController) GetBookByID(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	book, err := c.Usecase.GetBookByID(r.Context(), req.BookID)
+	res, err := c.Book.GetByID(r.Context(), req)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			http.Error(w, "book not found", http.StatusNotFound)
@@ -44,9 +48,8 @@ func (c *BookController) GetBookByID(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response.NewBookGetByID(book))
+	json.NewEncoder(w).Encode(res)
 }
 
 func (c *BookController) CreateBook(w http.ResponseWriter, r *http.Request) {
@@ -55,15 +58,13 @@ func (c *BookController) CreateBook(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
-	book, err := c.Usecase.CreateBook(r.Context(), req)
+	res, err := c.Book.Create(r.Context(), req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response.NewBookCreate(book))
+	json.NewEncoder(w).Encode(res)
 }
 
 func (c *BookController) DeleteBook(w http.ResponseWriter, r *http.Request) {
@@ -72,7 +73,8 @@ func (c *BookController) DeleteBook(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := c.Usecase.DeleteBook(r.Context(), req.BookID); err != nil {
+	_, err = c.Book.Delete(r.Context(), req)
+	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			http.Error(w, "book not found", http.StatusNotFound)
 			return
@@ -80,6 +82,5 @@ func (c *BookController) DeleteBook(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
 	w.WriteHeader(http.StatusNoContent)
 }
