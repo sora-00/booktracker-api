@@ -49,6 +49,9 @@ func (b Book) Create(ctx context.Context, r *request.BookCreate) (*response.Book
 		ThumbnailUrl:       r.ThumbnailUrl,
 		Status:             entity.Status(r.Status),
 		TargetCompleteDate: r.TargetCompleteDate,
+		EncounterNote:      r.EncounterNote,
+		ReadPages:          r.ReadPages,
+		TargetPagesPerDay:  r.TargetPagesPerDay,
 		CreatedAt:          now,
 		UpdatedAt:          now,
 	}

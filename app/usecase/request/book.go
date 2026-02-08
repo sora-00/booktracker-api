@@ -74,6 +74,9 @@ type BookCreateForm struct {
 	ThumbnailUrl       string    `json:"thumbnailUrl"`
 	Status             string    `json:"status"`
 	TargetCompleteDate time.Time `json:"targetCompleteDate"`
+	EncounterNote      string    `json:"encounterNote"`      // この本に出会った経緯
+	ReadPages          int       `json:"readPages"`          // 読み終わったページ数
+	TargetPagesPerDay  int       `json:"targetPagesPerDay"`  // 目標ページ数/日
 }
 
 func (f BookCreateForm) ValidateBookCreateForm() error {
@@ -94,6 +97,12 @@ func (f BookCreateForm) ValidateBookCreateForm() error {
 		return errors.New("status must be unread, reading, or completed")
 	case f.TargetCompleteDate.IsZero():
 		return errors.New("targetCompleteDate is required or invalid format (use RFC3339)")
+	case f.ReadPages < 0:
+		return errors.New("readPages must be 0 or greater")
+	case f.ReadPages > f.TotalPages:
+		return errors.New("readPages must not exceed totalPages")
+	case f.TargetPagesPerDay < 0:
+		return errors.New("targetPagesPerDay must be 0 or greater")
 	}
 	return nil
 }
