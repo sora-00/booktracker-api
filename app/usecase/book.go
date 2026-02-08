@@ -8,49 +8,60 @@ import (
 	"github.com/sora-00/booktracker-api/app/domain/repository"
 	"github.com/sora-00/booktracker-api/app/domain/service"
 	"github.com/sora-00/booktracker-api/app/usecase/request"
+	"github.com/sora-00/booktracker-api/app/usecase/response"
 )
 
-// BookUsecase は book に関するユースケースをまとめる
-type BookUsecase struct {
-	bookRepo    repository.BookRepo // DBアクセス
-	bookService *service.BookSvc      // ドメインロジック
+type Book struct {
+	bookRepo    repository.BookRepo
+	bookService *service.BookSvc
 }
 
-func NewUsecase(repo repository.BookRepo, svc *service.BookSvc) *BookUsecase {
-	return &BookUsecase{
+func NewBook(repo repository.BookRepo, svc *service.BookSvc) *Book {
+	return &Book{
 		bookRepo:    repo,
 		bookService: svc,
 	}
 }
 
-// すべての本を取得
-func (u *BookUsecase) GetAllBooks(ctx context.Context) ([]entity.Book, error) {
-	return u.bookRepo.FindAll(ctx)
+func (b Book) Get(ctx context.Context, r *request.BookGet) (*response.BookGet, error) {
+	books, err := b.bookRepo.FindAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return response.NewBookGet(books), nil
 }
 
-// ID指定で1冊取得
-func (u *BookUsecase) GetBookByID(ctx context.Context, id int) (*entity.Book, error) {
-	return u.bookRepo.FindByID(ctx, id)
+func (b Book) GetByID(ctx context.Context, r *request.BookGetByID) (*response.BookGetByID, error) {
+	book, err := b.bookRepo.FindByID(ctx, r.BookID)
+	if err != nil {
+		return nil, err
+	}
+	return response.NewBookGetByID(book), nil
 }
 
-// 本を登録（request を entity に変換するのは usecase の役割）
-func (u *BookUsecase) CreateBook(ctx context.Context, req *request.BookCreate) (*entity.Book, error) {
+func (b Book) Create(ctx context.Context, r *request.BookCreate) (*response.BookCreate, error) {
 	now := time.Now()
 	book := &entity.Book{
-		Title:              req.Title,
-		Author:             req.Author,
-		TotalPages:         req.TotalPages,
-		Publisher:          req.Publisher,
-		ThumbnailUrl:       req.ThumbnailUrl,
-		Status:             entity.Status(req.Status),
-		TargetCompleteDate: req.TargetCompleteDate,
+		Title:              r.Title,
+		Author:             r.Author,
+		TotalPages:         r.TotalPages,
+		Publisher:          r.Publisher,
+		ThumbnailUrl:       r.ThumbnailUrl,
+		Status:             entity.Status(r.Status),
+		TargetCompleteDate: r.TargetCompleteDate,
 		CreatedAt:          now,
 		UpdatedAt:          now,
 	}
-	return u.bookService.CreateBook(ctx, book)
+	created, err := b.bookService.CreateBook(ctx, book)
+	if err != nil {
+		return nil, err
+	}
+	return response.NewBookCreate(created), nil
 }
 
-// 本を削除
-func (u *BookUsecase) DeleteBook(ctx context.Context, id int) error {
-	return u.bookRepo.Delete(ctx, id)
+func (b Book) Delete(ctx context.Context, r *request.BookDelete) (*response.BookDelete, error) {
+	if err := b.bookRepo.Delete(ctx, r.BookID); err != nil {
+		return nil, err
+	}
+	return response.NewBookDelete(r.BookID), nil
 }

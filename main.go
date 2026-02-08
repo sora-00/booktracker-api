@@ -32,10 +32,10 @@ func main() {
 	bookService := service.NewService(bookRepo)
 
 	// usecase層（アプリケーションロジック）
-	bookUsecase := usecase.NewUsecase(bookRepo, bookService)
+	book := usecase.NewBook(bookRepo, bookService)
 
 	// controller層（HTTPハンドラ）
-	bookController := controller.NewController(bookUsecase)
+	bookController := controller.NewBookController(book)
 
 	// ルーティング設定
 	r := chi.NewRouter()

@@ -3,7 +3,6 @@ package request
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -38,32 +37,9 @@ type BookCreate struct {
 }
 
 func NewBookCreate(req *http.Request) (*BookCreate, error) {
-	var raw struct {
-		Title              string `json:"title"`
-		Author             string `json:"author"`
-		TotalPages         int    `json:"totalPages"`
-		Publisher          string `json:"publisher"`
-		ThumbnailUrl       string `json:"thumbnailUrl"`
-		Status             string `json:"status"`
-		TargetCompleteDate string `json:"targetCompleteDate"`
-	}
-	if err := json.NewDecoder(req.Body).Decode(&raw); err != nil {
+	r := &BookCreate{}
+	if err := json.NewDecoder(req.Body).Decode(r); err != nil {
 		return nil, err
-	}
-	targetDate, err := parseTargetCompleteDate(raw.TargetCompleteDate)
-	if err != nil {
-		return nil, err
-	}
-	r := &BookCreate{
-		BookCreateForm: BookCreateForm{
-			Title:              raw.Title,
-			Author:             raw.Author,
-			TotalPages:         raw.TotalPages,
-			Publisher:          raw.Publisher,
-			ThumbnailUrl:       raw.ThumbnailUrl,
-			Status:             raw.Status,
-			TargetCompleteDate: targetDate,
-		},
 	}
 	if err := r.ValidateBookCreateForm(); err != nil {
 		return nil, err
@@ -89,6 +65,7 @@ func NewBookDelete(req *http.Request) (*BookDelete, error) {
 
 // ---
 
+// BookCreateForm の targetCompleteDate はフロントから RFC3339 形式（例: "2025-12-31T00:00:00Z"）で送ること
 type BookCreateForm struct {
 	Title              string    `json:"title"`
 	Author             string    `json:"author"`
@@ -115,20 +92,8 @@ func (f BookCreateForm) ValidateBookCreateForm() error {
 		return errors.New("status is required")
 	case f.Status != "unread" && f.Status != "reading" && f.Status != "completed":
 		return errors.New("status must be unread, reading, or completed")
-	// targetCompleteDate は NewBookCreate でパース済み（ゼロ値なら不正）
-	if f.TargetCompleteDate.IsZero() {
-		return errors.New("targetCompleteDate is required or invalid format")
-	}
+	case f.TargetCompleteDate.IsZero():
+		return errors.New("targetCompleteDate is required or invalid format (use RFC3339)")
 	}
 	return nil
-}
-
-func parseTargetCompleteDate(value string) (time.Time, error) {
-	layouts := []string{time.RFC3339, "2006-01-02"}
-	for _, layout := range layouts {
-		if parsed, err := time.Parse(layout, value); err == nil {
-			return parsed, nil
-		}
-	}
-	return time.Time{}, fmt.Errorf("invalid targetCompleteDate format: %s", value)
 }
