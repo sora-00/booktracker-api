@@ -36,6 +36,7 @@ func main() {
 
 	// controller層（HTTPハンドラ）
 	bookController := controller.NewBookController(book)
+	bookThumbnailController := controller.NewBookThumbnailController()
 
 	// ルーティング設定
 	r := chi.NewRouter()
@@ -59,6 +60,11 @@ func main() {
 		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 	})
 
+	// GET / … ルートは 200 で返す（ブラウザで開いても 404 にしない）
+	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"ok":true,"message":"BookTracker API"}`))
+	})
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
 	})
@@ -70,6 +76,9 @@ func main() {
 	// /api/books（末尾なし）も直に受ける
 	r.Route("/api", func(r chi.Router) {
 		r.Route("/books", func(r chi.Router) {
+			// 本の表紙画像アップロード（/{id} より前に登録すること）
+			r.Post("/thumbnails", bookThumbnailController.PostThumbnail)
+			r.Get("/thumbnails/{id}", bookThumbnailController.GetThumbnail)
 			r.Get("/", bookController.GetBooks)
 			r.Get("/{id}", bookController.GetBookByID)
 			r.Post("/", bookController.CreateBook)
