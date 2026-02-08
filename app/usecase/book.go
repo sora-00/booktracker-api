@@ -49,6 +49,9 @@ func (b Book) Create(ctx context.Context, r *request.BookCreate) (*response.Book
 		ThumbnailUrl:       r.ThumbnailUrl,
 		Status:             entity.Status(r.Status),
 		TargetCompleteDate: r.TargetCompleteDate,
+		EncounterNote:      r.EncounterNote,
+		ReadPages:          r.ReadPages,
+		TargetPagesPerDay:  r.TargetPagesPerDay,
 		CreatedAt:          now,
 		UpdatedAt:          now,
 	}
@@ -57,6 +60,30 @@ func (b Book) Create(ctx context.Context, r *request.BookCreate) (*response.Book
 		return nil, err
 	}
 	return response.NewBookCreate(created), nil
+}
+
+func (b Book) Update(ctx context.Context, r *request.BookUpdate) (*response.BookUpdate, error) {
+	book, err := b.bookRepo.FindByID(ctx, r.BookID)
+	if err != nil {
+		return nil, err
+	}
+	if r.ThumbnailUrl != nil {
+		book.ThumbnailUrl = *r.ThumbnailUrl
+	}
+	if r.TargetCompleteDate != nil {
+		book.TargetCompleteDate = *r.TargetCompleteDate
+	}
+	if r.EncounterNote != nil {
+		book.EncounterNote = *r.EncounterNote
+	}
+	if r.TargetPagesPerDay != nil {
+		book.TargetPagesPerDay = *r.TargetPagesPerDay
+	}
+	book.UpdatedAt = time.Now()
+	if err := b.bookRepo.Update(ctx, book); err != nil {
+		return nil, err
+	}
+	return response.NewBookUpdate(book), nil
 }
 
 func (b Book) Delete(ctx context.Context, r *request.BookDelete) (*response.BookDelete, error) {

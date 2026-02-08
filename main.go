@@ -10,10 +10,10 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/sora-00/booktracker-api/app/controller"
+	"github.com/sora-00/booktracker-api/app/domain/repository"
 	"github.com/sora-00/booktracker-api/app/domain/service"
-	dsrepo "github.com/sora-00/booktracker-api/app/infra/repository/datastore"
+	dsclient "github.com/sora-00/booktracker-api/app/infra/datastore"
 	"github.com/sora-00/booktracker-api/app/usecase"
-	dsclient "github.com/sora-00/booktracker-api/pkg/datastore"
 )
 
 func main() {
@@ -25,8 +25,8 @@ func main() {
 	}
 	defer ds.Close()
 
-	// 依存関係の注入（infra層: Datastore 実装。ds は middleware で context に載せる）
-	bookRepo := dsrepo.NewBookRepo()
+	// 依存関係の注入（repository: interface + 実装。ds は middleware で context に載せる）
+	bookRepo := repository.NewBookRepo()
 
 	// domain層（ビジネスロジック）
 	bookService := service.NewService(bookRepo)
@@ -73,6 +73,7 @@ func main() {
 			r.Get("/", bookController.GetBooks)
 			r.Get("/{id}", bookController.GetBookByID)
 			r.Post("/", bookController.CreateBook)
+			r.Put("/{id}", bookController.UpdateBook)
 			r.Delete("/{id}", bookController.DeleteBook)
 		})
 	})
