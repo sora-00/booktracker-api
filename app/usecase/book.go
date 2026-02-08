@@ -62,6 +62,30 @@ func (b Book) Create(ctx context.Context, r *request.BookCreate) (*response.Book
 	return response.NewBookCreate(created), nil
 }
 
+func (b Book) Update(ctx context.Context, r *request.BookUpdate) (*response.BookUpdate, error) {
+	book, err := b.bookRepo.FindByID(ctx, r.BookID)
+	if err != nil {
+		return nil, err
+	}
+	if r.ThumbnailUrl != nil {
+		book.ThumbnailUrl = *r.ThumbnailUrl
+	}
+	if r.TargetCompleteDate != nil {
+		book.TargetCompleteDate = *r.TargetCompleteDate
+	}
+	if r.EncounterNote != nil {
+		book.EncounterNote = *r.EncounterNote
+	}
+	if r.TargetPagesPerDay != nil {
+		book.TargetPagesPerDay = *r.TargetPagesPerDay
+	}
+	book.UpdatedAt = time.Now()
+	if err := b.bookRepo.Update(ctx, book); err != nil {
+		return nil, err
+	}
+	return response.NewBookUpdate(book), nil
+}
+
 func (b Book) Delete(ctx context.Context, r *request.BookDelete) (*response.BookDelete, error) {
 	if err := b.bookRepo.Delete(ctx, r.BookID); err != nil {
 		return nil, err

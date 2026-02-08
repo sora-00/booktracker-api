@@ -32,6 +32,14 @@ func NewBookCreate(book *entity.Book) *BookCreate {
 	return &BookCreate{book}
 }
 
+type BookUpdate struct {
+	*entity.Book
+}
+
+func NewBookUpdate(book *entity.Book) *BookUpdate {
+	return &BookUpdate{book}
+}
+
 type BookDelete struct {
 	BookID int `json:"bookId"`
 }

@@ -73,6 +73,7 @@ func main() {
 			r.Get("/", bookController.GetBooks)
 			r.Get("/{id}", bookController.GetBookByID)
 			r.Post("/", bookController.CreateBook)
+			r.Put("/{id}", bookController.UpdateBook)
 			r.Delete("/{id}", bookController.DeleteBook)
 		})
 	})

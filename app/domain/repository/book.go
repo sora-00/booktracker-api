@@ -13,6 +13,7 @@ import (
 // BookRepo は本の永続化のインターフェース。
 type BookRepo interface {
 	Create(ctx context.Context, book *entity.Book) error
+	Update(ctx context.Context, book *entity.Book) error
 	FindAll(ctx context.Context) ([]entity.Book, error)
 	FindByID(ctx context.Context, id int) (*entity.Book, error)
 	Delete(ctx context.Context, id int) error
@@ -51,6 +52,16 @@ func (r *bookRepo) Create(ctx context.Context, book *entity.Book) error {
 	}
 	book.ID = int(key.ID)
 	return nil
+}
+
+func (r *bookRepo) Update(ctx context.Context, book *entity.Book) error {
+	ds, err := r.ds(ctx)
+	if err != nil {
+		return err
+	}
+	key := datastore.IDKey(kindBook, int64(book.ID), nil)
+	_, err = ds.Put(ctx, key, book)
+	return err
 }
 
 func (r *bookRepo) FindAll(ctx context.Context) ([]entity.Book, error) {

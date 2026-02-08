@@ -67,6 +67,25 @@ func (c *BookController) CreateBook(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(res)
 }
 
+func (c *BookController) UpdateBook(w http.ResponseWriter, r *http.Request) {
+	req, err := request.NewBookUpdate(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	res, err := c.Book.Update(r.Context(), req)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			http.Error(w, "book not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(res)
+}
+
 func (c *BookController) DeleteBook(w http.ResponseWriter, r *http.Request) {
 	req, err := request.NewBookDelete(r)
 	if err != nil {

@@ -63,6 +63,30 @@ func NewBookDelete(req *http.Request) (*BookDelete, error) {
 	return &BookDelete{BookID: id}, nil
 }
 
+type BookUpdate struct {
+	BookID int
+	BookUpdateForm
+}
+
+func NewBookUpdate(req *http.Request) (*BookUpdate, error) {
+	idStr := chi.URLParam(req, "id")
+	if idStr == "" {
+		return nil, errors.New("book id is required")
+	}
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		return nil, errors.New("invalid book id")
+	}
+	r := &BookUpdate{BookID: id}
+	if err := json.NewDecoder(req.Body).Decode(&r.BookUpdateForm); err != nil {
+		return nil, err
+	}
+	if err := r.ValidateBookUpdateForm(); err != nil {
+		return nil, err
+	}
+	return r, nil
+}
+
 // ---
 
 // BookCreateForm の targetCompleteDate はフロントから RFC3339 形式（例: "2025-12-31T00:00:00Z"）で送ること
@@ -103,6 +127,25 @@ func (f BookCreateForm) ValidateBookCreateForm() error {
 		return errors.New("readPages must not exceed totalPages")
 	case f.TargetPagesPerDay < 0:
 		return errors.New("targetPagesPerDay must be 0 or greater")
+	}
+	return nil
+}
+
+// BookUpdateForm は更新可能な項目のみ。送った項目だけ更新する（nil の項目は既存のまま）。
+// targetCompleteDate は RFC3339 形式で送ること。
+type BookUpdateForm struct {
+	ThumbnailUrl       *string    `json:"thumbnailUrl"`
+	TargetCompleteDate *time.Time `json:"targetCompleteDate"`
+	EncounterNote      *string    `json:"encounterNote"`
+	TargetPagesPerDay  *int       `json:"targetPagesPerDay"`
+}
+
+func (f BookUpdateForm) ValidateBookUpdateForm() error {
+	if f.TargetPagesPerDay != nil && *f.TargetPagesPerDay < 0 {
+		return errors.New("targetPagesPerDay must be 0 or greater")
+	}
+	if f.TargetCompleteDate != nil && f.TargetCompleteDate.IsZero() {
+		return errors.New("targetCompleteDate invalid format (use RFC3339)")
 	}
 	return nil
 }
