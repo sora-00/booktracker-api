@@ -48,7 +48,7 @@ func (b Book) Create(ctx context.Context, r *request.BookCreate) (*response.Book
 		Publisher:          r.Publisher,
 		ThumbnailUrl:       r.ThumbnailUrl,
 		Status:             entity.Status(r.Status),
-		TargetCompleteDate: r.TargetCompleteDate,
+		TargetCompleteDate: r.TargetCompleteDate.Time(),
 		EncounterNote:      r.EncounterNote,
 		ReadPages:          r.ReadPages,
 		TargetPagesPerDay:  r.TargetPagesPerDay,
@@ -71,7 +71,7 @@ func (b Book) Update(ctx context.Context, r *request.BookUpdate) (*response.Book
 		book.ThumbnailUrl = *r.ThumbnailUrl
 	}
 	if r.TargetCompleteDate != nil {
-		book.TargetCompleteDate = *r.TargetCompleteDate
+		book.TargetCompleteDate = r.TargetCompleteDate.Time()
 	}
 	if r.EncounterNote != nil {
 		book.EncounterNote = *r.EncounterNote
