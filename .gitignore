@@ -28,3 +28,6 @@ db_data/
 keys/
 *.credentials.json
 *-key.json
+
+# アップロード保存先（ローカル）
+uploads/
