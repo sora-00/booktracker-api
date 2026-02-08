@@ -90,7 +90,7 @@ func NewBookUpdate(req *http.Request) (*BookUpdate, error) {
 
 // ---
 
-// NormalizedDate は targetCompleteDate 用。YYYY-MM-DD または RFC3339 を受け付け、その日の 00:00:00Z に正規化してから DB に保存する。
+// NormalizedDate は targetCompleteDate 用。YYYY-MM-DD のみ受け付け、その日の 00:00:00Z に正規化してから DB に保存する。
 type NormalizedDate time.Time
 
 func (t *NormalizedDate) UnmarshalJSON(b []byte) error {
@@ -98,14 +98,9 @@ func (t *NormalizedDate) UnmarshalJSON(b []byte) error {
 	if s == "" || s == "null" {
 		return errors.New("targetCompleteDate is required or invalid format")
 	}
-	var parsed time.Time
-	var err error
-	parsed, err = time.Parse(time.RFC3339, s)
+	parsed, err := time.Parse("2006-01-02", s)
 	if err != nil {
-		parsed, err = time.Parse("2006-01-02", s)
-		if err != nil {
-			return errors.New("targetCompleteDate must be YYYY-MM-DD or RFC3339")
-		}
+		return errors.New("targetCompleteDate must be YYYY-MM-DD")
 	}
 	*t = NormalizedDate(time.Date(parsed.Year(), parsed.Month(), parsed.Day(), 0, 0, 0, 0, time.UTC))
 	return nil
@@ -113,7 +108,7 @@ func (t *NormalizedDate) UnmarshalJSON(b []byte) error {
 
 func (t NormalizedDate) Time() time.Time { return time.Time(t) }
 
-// BookCreateForm の targetCompleteDate は YYYY-MM-DD または RFC3339。正規化後 00:00:00Z で保存する。
+// BookCreateForm の targetCompleteDate は YYYY-MM-DD。正規化後 00:00:00Z で保存する。
 type BookCreateForm struct {
 	Title              string         `json:"title"`
 	Author             string         `json:"author"`
@@ -144,7 +139,7 @@ func (f BookCreateForm) ValidateBookCreateForm() error {
 	case f.Status != "unread" && f.Status != "reading" && f.Status != "completed":
 		return errors.New("status must be unread, reading, or completed")
 	case f.TargetCompleteDate.Time().IsZero():
-		return errors.New("targetCompleteDate is required or invalid format (use YYYY-MM-DD or RFC3339)")
+		return errors.New("targetCompleteDate is required or invalid format (use YYYY-MM-DD)")
 	case f.ReadPages < 0:
 		return errors.New("readPages must be 0 or greater")
 	case f.ReadPages > f.TotalPages:
@@ -156,7 +151,7 @@ func (f BookCreateForm) ValidateBookCreateForm() error {
 }
 
 // BookUpdateForm は更新可能な項目のみ。送った項目だけ更新する（nil の項目は既存のまま）。
-// targetCompleteDate は YYYY-MM-DD または RFC3339。正規化後 00:00:00Z で保存する。
+// targetCompleteDate は YYYY-MM-DD。正規化後 00:00:00Z で保存する。
 type BookUpdateForm struct {
 	ThumbnailUrl       *string         `json:"thumbnailUrl"`
 	TargetCompleteDate *NormalizedDate `json:"targetCompleteDate"`
@@ -169,7 +164,7 @@ func (f BookUpdateForm) ValidateBookUpdateForm() error {
 		return errors.New("targetPagesPerDay must be 0 or greater")
 	}
 	if f.TargetCompleteDate != nil && f.TargetCompleteDate.Time().IsZero() {
-		return errors.New("targetCompleteDate invalid format (use YYYY-MM-DD or RFC3339)")
+		return errors.New("targetCompleteDate invalid format (use YYYY-MM-DD)")
 	}
 	return nil
 }
