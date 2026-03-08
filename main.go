@@ -80,6 +80,7 @@ func main() {
 			r.Post("/thumbnails", bookThumbnailController.PostThumbnail)
 			r.Get("/thumbnails/{id}", bookThumbnailController.GetThumbnail)
 			r.Get("/", bookController.GetBooks)
+			r.Get("/status/{status}", bookController.GetBooksByStatus)
 			r.Get("/{id}", bookController.GetBookByID)
 			r.Post("/", bookController.CreateBook)
 			r.Put("/{id}", bookController.UpdateBook)

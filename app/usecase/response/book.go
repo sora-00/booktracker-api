@@ -2,26 +2,42 @@ package response
 
 import (
 	"github.com/sora-00/booktracker-api/app/domain/entity"
+	"github.com/sora-00/booktracker-api/app/domain/service"
 )
 
+// BookListItem は一覧用。API が計算した remainingDays を含む。
+type BookListItem struct {
+	*entity.Book
+	RemainingDays int `json:"remainingDays"`
+}
+
 type BookGet struct {
-	Books []*entity.Book `json:"books"`
+	Books []*BookListItem `json:"books"`
 }
 
 func NewBookGet(books []entity.Book) *BookGet {
-	bs := make([]*entity.Book, 0, len(books))
+	items := make([]*BookListItem, 0, len(books))
 	for i := range books {
-		bs = append(bs, &books[i])
+		b := &books[i]
+		items = append(items, &BookListItem{
+			Book:          b,
+			RemainingDays: service.RemainingDays(b.TargetCompleteDate),
+		})
 	}
-	return &BookGet{Books: bs}
+	return &BookGet{Books: items}
 }
 
+// BookGetByID は 1 件取得用。remainingDays を含む。
 type BookGetByID struct {
 	*entity.Book
+	RemainingDays int `json:"remainingDays"`
 }
 
 func NewBookGetByID(book *entity.Book) *BookGetByID {
-	return &BookGetByID{book}
+	return &BookGetByID{
+		Book:          book,
+		RemainingDays: service.RemainingDays(book.TargetCompleteDate),
+	}
 }
 
 type BookCreate struct {

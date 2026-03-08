@@ -15,6 +15,7 @@ type BookRepo interface {
 	Create(ctx context.Context, book *entity.Book) error
 	Update(ctx context.Context, book *entity.Book) error
 	FindAll(ctx context.Context) ([]entity.Book, error)
+	FindByStatus(ctx context.Context, status entity.Status) ([]entity.Book, error)
 	FindByID(ctx context.Context, id int) (*entity.Book, error)
 	Delete(ctx context.Context, id int) error
 }
@@ -70,6 +71,23 @@ func (r *bookRepo) FindAll(ctx context.Context) ([]entity.Book, error) {
 		return nil, err
 	}
 	q := datastore.NewQuery(kindBook).Order("createdAt")
+	var books []entity.Book
+	keys, err := ds.GetAll(ctx, q, &books)
+	if err != nil {
+		return nil, err
+	}
+	for i := range keys {
+		books[i].ID = int(keys[i].ID)
+	}
+	return books, nil
+}
+
+func (r *bookRepo) FindByStatus(ctx context.Context, status entity.Status) ([]entity.Book, error) {
+	ds, err := r.ds(ctx)
+	if err != nil {
+		return nil, err
+	}
+	q := datastore.NewQuery(kindBook).Filter("status =", string(status)).Order("createdAt")
 	var books []entity.Book
 	keys, err := ds.GetAll(ctx, q, &books)
 	if err != nil {
