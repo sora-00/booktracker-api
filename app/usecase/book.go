@@ -31,6 +31,14 @@ func (b Book) Get(ctx context.Context, r *request.BookGet) (*response.BookGet, e
 	return response.NewBookGet(books), nil
 }
 
+func (b Book) GetByStatus(ctx context.Context, r *request.BookGetByStatus) (*response.BookGet, error) {
+	books, err := b.bookRepo.FindByStatus(ctx, entity.Status(r.Status))
+	if err != nil {
+		return nil, err
+	}
+	return response.NewBookGet(books), nil
+}
+
 func (b Book) GetByID(ctx context.Context, r *request.BookGetByID) (*response.BookGetByID, error) {
 	book, err := b.bookRepo.FindByID(ctx, r.BookID)
 	if err != nil {

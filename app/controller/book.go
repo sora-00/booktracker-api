@@ -33,6 +33,21 @@ func (c *BookController) GetBooks(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(res)
 }
 
+func (c *BookController) GetBooksByStatus(w http.ResponseWriter, r *http.Request) {
+	req, err := request.NewBookGetByStatus(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	res, err := c.Book.GetByStatus(r.Context(), req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(res)
+}
+
 func (c *BookController) GetBookByID(w http.ResponseWriter, r *http.Request) {
 	req, err := request.NewBookGetByID(r)
 	if err != nil {

@@ -11,10 +11,24 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// BookGet は GET /books のリクエスト。常に全件。
 type BookGet struct{}
 
 func NewBookGet(req *http.Request) (*BookGet, error) {
 	return &BookGet{}, nil
+}
+
+// BookGetByStatus は GET /books/status/:status のリクエスト。
+type BookGetByStatus struct {
+	Status string // unread / reading / completed（URL パスから）
+}
+
+func NewBookGetByStatus(req *http.Request) (*BookGetByStatus, error) {
+	status := strings.TrimSpace(chi.URLParam(req, "status"))
+	if status == "" {
+		return nil, errors.New("status is required")
+	}
+	return &BookGetByStatus{Status: status}, nil
 }
 
 type BookGetByID struct {
