@@ -9,18 +9,19 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/sora-00/booktracker-api/app/domain/entity"
+	"github.com/sora-00/booktracker-api/app/domain/service/validation"
 )
 
-// BookGet は GET /books のリクエスト。常に全件。
 type BookGet struct{}
 
-func NewBookGet(req *http.Request) (*BookGet, error) {
+func NewBookGet(_ *http.Request) (*BookGet, error) {
 	return &BookGet{}, nil
 }
 
-// BookGetByStatus は GET /books/status/:status のリクエスト。
 type BookGetByStatus struct {
-	Status string // unread / reading / completed（URL パスから）
+	Status string
 }
 
 func NewBookGetByStatus(req *http.Request) (*BookGetByStatus, error) {
@@ -28,21 +29,20 @@ func NewBookGetByStatus(req *http.Request) (*BookGetByStatus, error) {
 	if status == "" {
 		return nil, errors.New("status is required")
 	}
+	if err := validation.ValidateBookStatus(status); err != nil {
+		return nil, err
+	}
 	return &BookGetByStatus{Status: status}, nil
 }
 
 type BookGetByID struct {
-	BookID int `json:"bookId"`
+	BookID int
 }
 
 func NewBookGetByID(req *http.Request) (*BookGetByID, error) {
-	idStr := chi.URLParam(req, "id")
-	if idStr == "" {
-		return nil, errors.New("book id is required")
-	}
-	id, err := strconv.Atoi(idStr)
+	id, err := parseIDParam(req, "id", "book id")
 	if err != nil {
-		return nil, errors.New("invalid book id")
+		return nil, err
 	}
 	return &BookGetByID{BookID: id}, nil
 }
@@ -63,17 +63,13 @@ func NewBookCreate(req *http.Request) (*BookCreate, error) {
 }
 
 type BookDelete struct {
-	BookID int `json:"bookId"`
+	BookID int
 }
 
 func NewBookDelete(req *http.Request) (*BookDelete, error) {
-	idStr := chi.URLParam(req, "id")
-	if idStr == "" {
-		return nil, errors.New("book id is required")
-	}
-	id, err := strconv.Atoi(idStr)
+	id, err := parseIDParam(req, "id", "book id")
 	if err != nil {
-		return nil, errors.New("invalid book id")
+		return nil, err
 	}
 	return &BookDelete{BookID: id}, nil
 }
@@ -84,13 +80,9 @@ type BookUpdate struct {
 }
 
 func NewBookUpdate(req *http.Request) (*BookUpdate, error) {
-	idStr := chi.URLParam(req, "id")
-	if idStr == "" {
-		return nil, errors.New("book id is required")
-	}
-	id, err := strconv.Atoi(idStr)
+	id, err := parseIDParam(req, "id", "book id")
 	if err != nil {
-		return nil, errors.New("invalid book id")
+		return nil, err
 	}
 	r := &BookUpdate{BookID: id}
 	if err := json.NewDecoder(req.Body).Decode(&r.BookUpdateForm); err != nil {
@@ -102,9 +94,7 @@ func NewBookUpdate(req *http.Request) (*BookUpdate, error) {
 	return r, nil
 }
 
-// ---
-
-// NormalizedDate は targetCompleteDate 用。YYYY-MM-DD のみ受け付け、その日の 00:00:00Z に正規化してから DB に保存する。
+// NormalizedDate は targetCompleteDate 用。YYYY-MM-DD または RFC3339 を受け付け、00:00:00 UTC に正規化する。
 type NormalizedDate time.Time
 
 func (t *NormalizedDate) UnmarshalJSON(b []byte) error {
@@ -112,9 +102,15 @@ func (t *NormalizedDate) UnmarshalJSON(b []byte) error {
 	if s == "" || s == "null" {
 		return errors.New("targetCompleteDate is required or invalid format")
 	}
-	parsed, err := time.Parse("2006-01-02", s)
+	var parsed time.Time
+	var err error
+	if strings.Contains(s, "T") || len(s) > 10 {
+		parsed, err = time.Parse(time.RFC3339, s)
+	} else {
+		parsed, err = time.Parse("2006-01-02", s)
+	}
 	if err != nil {
-		return errors.New("targetCompleteDate must be YYYY-MM-DD")
+		return errors.New("targetCompleteDate must be YYYY-MM-DD or RFC3339")
 	}
 	*t = NormalizedDate(time.Date(parsed.Year(), parsed.Month(), parsed.Day(), 0, 0, 0, 0, time.UTC))
 	return nil
@@ -122,63 +118,135 @@ func (t *NormalizedDate) UnmarshalJSON(b []byte) error {
 
 func (t NormalizedDate) Time() time.Time { return time.Time(t) }
 
-// BookCreateForm の targetCompleteDate は YYYY-MM-DD。正規化後 00:00:00Z で保存する。
+// BookCreateForm は POST /books のリクエストボディ。
 type BookCreateForm struct {
 	Title              string         `json:"title"`
 	Author             string         `json:"author"`
-	TotalPages         int            `json:"totalPages"`
 	Publisher          string         `json:"publisher"`
 	ThumbnailUrl       string         `json:"thumbnailUrl"`
-	Status             string         `json:"status"`
+	TotalPages         int            `json:"totalPages"`
 	TargetCompleteDate NormalizedDate `json:"targetCompleteDate"`
-	EncounterNote      string         `json:"encounterNote"`      // この本に出会った経緯
-	ReadPages          int            `json:"readPages"`          // 読み終わったページ数
-	TargetPagesPerDay  int            `json:"targetPagesPerDay"`  // 目標ページ数/日
+	TargetPagesPerDay  int            `json:"targetPagesPerDay"`
+	Status             entity.Status  `json:"status"`
+	ReadPages          int            `json:"readPages"`
+	EncounterNote      string         `json:"encounterNote"`
 }
 
 func (f BookCreateForm) ValidateBookCreateForm() error {
-	switch {
-	case f.Title == "":
+	if f.Title == "" {
 		return errors.New("title is required")
-	case f.Author == "":
+	}
+	if len(f.Title) > validation.MaxLenTitle {
+		return errors.New("title must be 30 characters or less")
+	}
+	if f.Author == "" {
 		return errors.New("author is required")
-	case f.TotalPages == 0:
-		return errors.New("totalPages is required")
-	case f.Publisher == "":
+	}
+	if len(f.Author) > validation.MaxLenAuthor {
+		return errors.New("author must be 30 characters or less")
+	}
+	if f.Publisher == "" {
 		return errors.New("publisher is required")
-	case f.ThumbnailUrl == "":
+	}
+	if len(f.Publisher) > validation.MaxLenPublish {
+		return errors.New("publisher must be 20 characters or less")
+	}
+	if f.ThumbnailUrl == "" {
 		return errors.New("thumbnailUrl is required")
-	case f.Status == "":
-		return errors.New("status is required")
-	case f.Status != "unread" && f.Status != "reading" && f.Status != "completed":
-		return errors.New("status must be unread, reading, or completed")
-	case f.TargetCompleteDate.Time().IsZero():
-		return errors.New("targetCompleteDate is required or invalid format (use YYYY-MM-DD)")
-	case f.ReadPages < 0:
-		return errors.New("readPages must be 0 or greater")
-	case f.ReadPages > f.TotalPages:
-		return errors.New("readPages must not exceed totalPages")
-	case f.TargetPagesPerDay < 0:
-		return errors.New("targetPagesPerDay must be 0 or greater")
+	}
+	if err := validation.ValidatePagesAll(f.TotalPages); err != nil {
+		return err
+	}
+	if err := validation.ValidateBookStatus(string(f.Status)); err != nil {
+		return err
+	}
+	if f.TargetCompleteDate.Time().Before(time.Now().UTC().Truncate(24 * time.Hour)) {
+		return errors.New("targetCompleteDate must be after now")
+	}
+	if err := validation.ValidateTargetReadPagesPerDay(f.TargetPagesPerDay, f.TotalPages); err != nil {
+		return err
+	}
+	if f.Status != entity.StatusUnread {
+		if f.ReadPages < 0 {
+			return errors.New("readPages is required when status is not unread")
+		}
+		if f.ReadPages > f.TotalPages {
+			return errors.New("readPages must not exceed totalPages")
+		}
+		if f.ReadPages > validation.MaxPagesDigits {
+			return errors.New("readPages must be 4 digits or less")
+		}
+	}
+	if len(f.EncounterNote) > validation.MaxLenBackground {
+		return errors.New("encounterNote must be 200 characters or less")
 	}
 	return nil
 }
 
-// BookUpdateForm は更新可能な項目のみ。送った項目だけ更新する（nil の項目は既存のまま）。
-// targetCompleteDate は YYYY-MM-DD。正規化後 00:00:00Z で保存する。
+// BookUpdateForm は PUT /books/:id のリクエストボディ（全フィールドがオプション）。
 type BookUpdateForm struct {
+	Title              *string         `json:"title"`
+	Author             *string         `json:"author"`
+	Publisher          *string         `json:"publisher"`
 	ThumbnailUrl       *string         `json:"thumbnailUrl"`
+	TotalPages         *int            `json:"totalPages"`
 	TargetCompleteDate *NormalizedDate `json:"targetCompleteDate"`
-	EncounterNote      *string         `json:"encounterNote"`
 	TargetPagesPerDay  *int            `json:"targetPagesPerDay"`
+	Status             *string         `json:"status"`
+	EncounterNote      *string         `json:"encounterNote"`
 }
 
 func (f BookUpdateForm) ValidateBookUpdateForm() error {
-	if f.TargetPagesPerDay != nil && *f.TargetPagesPerDay < 0 {
-		return errors.New("targetPagesPerDay must be 0 or greater")
+	if f.Title != nil {
+		if *f.Title == "" {
+			return errors.New("title cannot be empty")
+		}
+		if len(*f.Title) > validation.MaxLenTitle {
+			return errors.New("title must be 30 characters or less")
+		}
 	}
-	if f.TargetCompleteDate != nil && f.TargetCompleteDate.Time().IsZero() {
-		return errors.New("targetCompleteDate invalid format (use YYYY-MM-DD)")
+	if f.Author != nil && len(*f.Author) > validation.MaxLenAuthor {
+		return errors.New("author must be 30 characters or less")
+	}
+	if f.Publisher != nil && len(*f.Publisher) > validation.MaxLenPublish {
+		return errors.New("publisher must be 20 characters or less")
+	}
+	if f.ThumbnailUrl != nil && *f.ThumbnailUrl == "" {
+		return errors.New("thumbnailUrl cannot be empty")
+	}
+	if f.TotalPages != nil {
+		if err := validation.ValidatePagesAll(*f.TotalPages); err != nil {
+			return err
+		}
+	}
+	if f.TargetPagesPerDay != nil {
+		pagesAll := 1
+		if f.TotalPages != nil {
+			pagesAll = *f.TotalPages
+		}
+		if err := validation.ValidateTargetReadPagesPerDay(*f.TargetPagesPerDay, pagesAll); err != nil {
+			return err
+		}
+	}
+	if f.Status != nil {
+		if err := validation.ValidateBookStatus(*f.Status); err != nil {
+			return err
+		}
+	}
+	if f.EncounterNote != nil && len(*f.EncounterNote) > validation.MaxLenBackground {
+		return errors.New("encounterNote must be 200 characters or less")
 	}
 	return nil
+}
+
+func parseIDParam(req *http.Request, param, displayName string) (int, error) {
+	s := chi.URLParam(req, param)
+	if s == "" {
+		return 0, errors.New(displayName + " is required")
+	}
+	id, err := strconv.Atoi(s)
+	if err != nil {
+		return 0, errors.New("invalid " + displayName)
+	}
+	return id, nil
 }

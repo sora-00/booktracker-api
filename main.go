@@ -6,61 +6,68 @@ import (
 	"net/http"
 	"os"
 
+	"cloud.google.com/go/datastore"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/joho/godotenv"
 
 	"github.com/sora-00/booktracker-api/app/controller"
+	"github.com/sora-00/booktracker-api/app/controller/authn"
 	"github.com/sora-00/booktracker-api/app/domain/repository"
 	"github.com/sora-00/booktracker-api/app/domain/service"
+	"github.com/sora-00/booktracker-api/app/infra/auth"
 	dsclient "github.com/sora-00/booktracker-api/app/infra/datastore"
+	infrarepo "github.com/sora-00/booktracker-api/app/infra/repository"
+	"github.com/sora-00/booktracker-api/app/infra/storage"
 	"github.com/sora-00/booktracker-api/app/usecase"
 )
 
 func main() {
+	_ = godotenv.Load()
+
 	ctx := context.Background()
-	// Cloud Datastore 接続
 	ds, err := dsclient.NewClient(ctx)
 	if err != nil {
 		log.Fatalf("failed to connect datastore: %v", err)
 	}
 	defer ds.Close()
 
-	// 依存関係の注入（repository: interface + 実装。ds は middleware で context に載せる）
-	bookRepo := repository.NewBookRepo()
+	// --- repos ---
+	bookRepo := infrarepo.NewBookRepo()
+	logRepo := infrarepo.NewLogRepo()
+	meRepo := infrarepo.NewMeRepo()
+	bookThumbnailRepo := initBookThumbnailRepo(ctx)
 
-	// domain層（ビジネスロジック）
-	bookService := service.NewService(bookRepo)
+	// --- services ---
+	logSvc := service.NewLogService(logRepo)
 
-	// usecase層（アプリケーションロジック）
-	book := usecase.NewBook(bookRepo, bookService)
+	// --- usecases ---
+	bookUsecase := usecase.NewBook(bookRepo, logRepo)
+	logUsecase := usecase.NewLog(logRepo, bookRepo, logSvc)
+	meUsecase := usecase.NewMe(meRepo)
+	thumbUsecase := usecase.NewBookThumbnail(bookThumbnailRepo)
 
-	// controller層（HTTPハンドラ）
-	bookController := controller.NewBookController(book)
-	bookThumbnailController := controller.NewBookThumbnailController()
+	// --- controllers ---
+	bookCtrl := controller.NewBookController(bookUsecase)
+	logCtrl := controller.NewLogController(logUsecase)
+	meCtrl := controller.NewMeController(meUsecase)
+	thumbCtrl := controller.NewBookThumbnailController(thumbUsecase)
 
-	// ルーティング設定
+	// --- auth ---
+	credPath := os.Getenv("FIREBASE_CREDENTIALS_JSON")
+	fbVerifier, err := auth.NewFirebaseVerifier(ctx, credPath)
+	if err != nil {
+		log.Printf("firebase auth disabled (init failed): %v", err)
+		fbVerifier = nil
+	}
+
+	// --- router ---
 	r := chi.NewRouter()
+	r.Use(middleware.RequestID)
+	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
-	// 各リクエストの context に Datastore クライアントを入れる（repository で FromContext する前提）
-	r.Use(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx := dsclient.WithContext(r.Context(), ds)
-			next.ServeHTTP(w, r.WithContext(ctx))
-		})
-	})
 
-	// 404/405を可視化
-	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("404 Not Found: %s %s", r.Method, r.URL.Path)
-		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
-	})
-	r.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("405 Method Not Allowed: %s %s", r.Method, r.URL.Path)
-		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
-	})
-
-	// GET / … ルートは 200 で返す（ブラウザで開いても 404 にしない）
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"ok":true,"message":"BookTracker API"}`))
@@ -68,34 +75,86 @@ func main() {
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
 	})
-	// ブラウザが自動で叩く favicon は 204 で返して 404 ログを出さない
 	r.Get("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	// /api/books（末尾なし）も直に受ける
 	r.Route("/api", func(r chi.Router) {
+		r.Use(withDatastore(ds))
+		r.Use(authn.RequireAuth(fbVerifier, meRepo))
+
+		r.Route("/me", func(r chi.Router) {
+			r.Get("/", meCtrl.GetMe)
+			r.Delete("/", meCtrl.DeleteMe)
+		})
+
 		r.Route("/books", func(r chi.Router) {
-			// 本の表紙画像アップロード（/{id} より前に登録すること）
-			r.Post("/thumbnails", bookThumbnailController.PostThumbnail)
-			r.Get("/thumbnails/{id}", bookThumbnailController.GetThumbnail)
-			r.Get("/", bookController.GetBooks)
-			r.Get("/status/{status}", bookController.GetBooksByStatus)
-			r.Get("/{id}", bookController.GetBookByID)
-			r.Post("/", bookController.CreateBook)
-			r.Put("/{id}", bookController.UpdateBook)
-			r.Delete("/{id}", bookController.DeleteBook)
+			r.Get("/", bookCtrl.GetBooks)
+			r.Post("/", bookCtrl.CreateBook)
+
+			r.Route("/status/{status}", func(r chi.Router) {
+				r.Get("/", bookCtrl.GetBooksByStatus)
+				r.Get("/logs", bookCtrl.GetLogsByBookStatus)
+			})
+
+			r.Route("/thumbnails", func(r chi.Router) {
+				r.Post("/", thumbCtrl.PostThumbnail)
+				r.Get("/{id}", thumbCtrl.GetThumbnail)
+			})
+
+			r.Route("/{id}", func(r chi.Router) {
+				r.Get("/", bookCtrl.GetBookByID)
+				r.Put("/", bookCtrl.UpdateBook)
+				r.Delete("/", bookCtrl.DeleteBook)
+			})
+
+			r.Route("/{bookId}/logs", func(r chi.Router) {
+				r.Get("/", logCtrl.GetLogsByBookID)
+				r.Delete("/", logCtrl.DeleteLogsByBookID)
+			})
+		})
+
+		r.Route("/logs", func(r chi.Router) {
+			r.Get("/", logCtrl.GetLogs)
+			r.Post("/", logCtrl.CreateLog)
+
+			r.Route("/{id}", func(r chi.Router) {
+				r.Get("/", logCtrl.GetLogByID)
+				r.Put("/", logCtrl.UpdateLog)
+				r.Delete("/", logCtrl.DeleteLog)
+			})
 		})
 	})
 
-	// サーバー起動
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8085"
 	}
-	addr := ":" + port
-	log.Printf("Listening on %s 🚀\n", addr)
-	if err := http.ListenAndServe(addr, r); err != nil {
+	log.Printf("Listening on :%s\n", port)
+	if err := http.ListenAndServe(":"+port, r); err != nil {
 		log.Fatalf("server failed: %v", err)
 	}
+}
+
+// withDatastore は Datastore クライアントをリクエストのコンテキストに載せるミドルウェア。
+func withDatastore(ds *datastore.Client) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := dsclient.WithContext(r.Context(), ds)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+func initBookThumbnailRepo(ctx context.Context) repository.BookThumbnailRepo {
+	repo, err := storage.NewBookThumbnailRepo(
+		ctx,
+		os.Getenv("AWS_S3_BUCKET"),
+		os.Getenv("AWS_S3_PREFIX"),
+		os.Getenv("AWS_REGION"),
+	)
+	if err != nil {
+		log.Fatalf("failed to initialize S3 thumbnail storage: %v", err)
+	}
+	return repo
 }
