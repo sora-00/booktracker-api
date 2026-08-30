@@ -1,15 +1,65 @@
+name: booktracker-api
+
 services:
+  # Local only: Datastore emulator (Firestore in Datastore mode)
+  datastore:
+    image: google/cloud-sdk:alpine
+    profiles: ["local"]
+    command:
+      - /bin/sh
+      - -c
+      - |
+        gcloud components install beta --quiet >/dev/null 2>&1 || true
+        exec gcloud beta emulators datastore start \
+          --use-firestore-in-datastore-mode \
+          --project=${GCP_PROJECT_ID:-booktracker} \
+          --host-port=0.0.0.0:${DATASTORE_PORT:-8059} \
+          --data-dir=/opt/datastore/data
+    environment:
+      GCP_PROJECT_ID: ${GCP_PROJECT_ID:-booktracker}
+    ports:
+      - "${DATASTORE_PORT:-8059}:${DATASTORE_PORT:-8059}"
+    volumes:
+      - datastore_data:/opt/datastore/data
+
+  # Local only: Datastore admin UI
+  dsadmin:
+    image: ghcr.io/remko/dsadmin:latest
+    profiles: ["local"]
+    environment:
+      DATASTORE_EMULATOR_HOST: datastore:${DATASTORE_PORT:-8059}
+      DATASTORE_PROJECT_ID: ${GCP_PROJECT_ID:-booktracker}
+    ports:
+      - "${DSADMIN_PORT:-8060}:8080"
+    depends_on:
+      - datastore
+
   api:
     build: .
     container_name: booktracker-api
+    profiles: ["local", "cloud", "prod"]
     environment:
-      - PORT=8081
-      # ホストで動いている Datastore エミュレータに接続（先に別ターミナルで gcloud beta emulators datastore start --project=booktracker）
-      - DATASTORE_EMULATOR_HOST=host.docker.internal:8081
-      - GCP_PROJECT_ID=${GCP_PROJECT_ID:-booktracker}
+      PORT: "${APP_INTERNAL_PORT:-8081}"
+      GCP_PROJECT_ID: ${GCP_PROJECT_ID:-booktracker}
+      DATASTORE_EMULATOR_HOST: ${DATASTORE_EMULATOR_HOST:-}
+      # ADC (Google Cloud / Datastore 用)。API コンテナは .:/app をマウントするため相対パスでOKです。
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET}
+      AWS_REGION: ${AWS_REGION}
+      AWS_S3_PREFIX: ${AWS_S3_PREFIX}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN}
+      FIREBASE_CREDENTIALS_JSON: ${FIREBASE_CREDENTIALS_JSON}
     ports:
-      - "8085:8081"
+      - "${API_PORT:-8085}:${APP_INTERNAL_PORT:-8081}"
     volumes:
       - .:/app
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - ${HOME}/.config/gcloud:/root/.config/gcloud:ro
+    depends_on:
+      datastore:
+        condition: service_started
+        required: false
+
+volumes:
+  datastore_data:
